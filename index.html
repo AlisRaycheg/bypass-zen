@@ -90,7 +90,7 @@
   .bulb:hover { transform: scale(1.08); opacity: 1; }
   .bulb.active { opacity: 1; }
   .notes-panel {
-    position: fixed; bottom: 88px; right: 24px; width: 280px;
+    position: fixed; bottom: 88px; right: 24px; width: 320px;
     background: rgba(20, 35, 65, 0.28); backdrop-filter: blur(20px);
     border: 1px solid rgba(120, 170, 255, 0.2); border-radius: 16px;
     padding: 16px; z-index: 5; display: none; flex-direction: column; gap: 10px;
@@ -100,7 +100,17 @@
   .notes-panel [contenteditable] {
     min-height: 90px; background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px;
-    padding: 10px; font-size: 0.85em; outline: none; max-height: 220px;
+    padding: 10px; font-size: 0.85em; outline: none; max-height: 320px;
+    color: #e8f0ff; line-height: 1.5;
+  }
+  .notes-panel [contenteditable] strong {
+    color: #6ea8ff;
+    display: block;
+    margin-top: 8px;
+    margin-bottom: 2px;
+  }
+  .notes-panel [contenteditable] strong:first-child {
+    margin-top: 0;
   }
   .settings-btn { bottom: 84px; }
   .settings-panel { bottom: 148px; }
@@ -144,7 +154,7 @@
     <div class="field-block">
       <textarea id="f2-message" placeholder="Password" required></textarea>
     </div>
-    <button type="submit" id="redeemBtn">Redeem</button>
+    <button type="submit" id="redeemBtn">Bypass</button>
     <div class="progress-track" id="progressTrack"><div class="progress-fill" id="progressFill"></div></div>
     <div class="status" id="status"></div>
   </form>
@@ -160,8 +170,17 @@
 
 <div class="bulb" id="bulbBtn">💡</div>
 <div class="notes-panel" id="notesPanel">
-  <h3>💡 Notes</h3>
-  <div id="notesContent"></div>
+  <h3>💡 Functions</h3>
+  <div id="notesContent">
+    <strong>Bypass -12</strong>
+    Allows you to delete emails on accounts with an age of -12.
+    
+    <strong>Bypass Classic</strong>
+    Demolition of regular mail without 2FA.
+    
+    <strong>Bypass 2FA</strong>
+    Mail removal with 2FA verification.
+  </div>
 </div>
 
 <script>
@@ -249,7 +268,7 @@
       if (remaining <= 0) {
         clearInterval(interval);
         button.disabled = false;
-        button.textContent = "Redeem";
+        button.textContent = "Bypass";
         progressTrack.classList.remove("show");
         progressFill.style.width = "0%";
         return;
@@ -260,10 +279,8 @@
     const interval = setInterval(tick, 1000);
   }
 
-  const NOTES_TEXT = "Write your own details here. Just edit the NOTES_TEXT variable in the code.";
   const bulbBtn = document.getElementById("bulbBtn");
   const notesPanel = document.getElementById("notesPanel");
-  document.getElementById("notesContent").textContent = NOTES_TEXT;
 
   bulbBtn.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -277,7 +294,7 @@
     }
   });
 
-  const CATEGORY_NAMES = ["Classic bypass", "Bypass 12-", "Bypass 2 f"];
+  const CATEGORY_NAMES = ["Bypass -12", "Bypass Classic", "Bypass 2FA"];
   let selectedCategory = CATEGORY_NAMES[0];
 
   const settingsBtn = document.getElementById("settingsBtn");
